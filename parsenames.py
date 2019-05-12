@@ -13,58 +13,44 @@ from xml.sax.saxutils import escape
 from itertools import zip_longest
 import re
 
+#constants
+VOL_FILENAME_INDEX = 0 #filename of pdf
+VOL_TITLE_INDEX = 1 #title for citation (including volume)
+VOL_FIRST_PAGE_INDEX = 2 #first page of first paper in the volume
+VOL_PAGE_OFFSET_INDEX = 3 #pdf page number minus written page number
+VOL_LAST_PAPER_INDEX = 4 #first page of last paper of last volume
+VOL_END_PAGE = 5 #page after last page of last paper of last volume
+
+ENTRY_START_PAGE_INDEX = 0
+ENTRY_TITLE_INDEX = 1
+ENTRY_AUTHORS_INDEX = 2
+ENTRY_VOL_NUM_INDEX = 3
+ENTRY_PAPER_TYPE_INDEX = 4
+
 #UPDATE VALUES
-
-#filename of volume pdfs
-volumeonefilename = 'ICLS 2014 Volume 1 (PDF)-wCover.pdf'
-volumetwofilename = 'ICLS 2014 Volume 2 (PDF)-wCover.pdf'
-volumethreefilename = 'ICLS 2014 Volume 3 (PDF)-wCover.pdf'
-
-#volume names
-volumeonename = 'Volume 1'
-volumetwoname = 'Volume 2'
-volumethreename = 'Volume 3'
+volumes = [['CSCL2011_Conference_Proceedings_Vol1.pdf','Connecting Computer-Supported Collaborative Learning to Policy and Practice: CSCL2011 Conference Proceedings. Volume I — Long Papers',1,36,558,566],['CSCL2011_Conference_Proceedings_Vol2.pdf','Connecting Computer-Supported Collaborative Learning to Policy and Practice: CSCL2011 Conference Proceedings. Volume II — Short Papers & Posters',566,-531,1006,1008],['CSCL2011_Conference_Proceedings_Vol3.pdf','Connecting Computer-Supported Collaborative Learning to Policy and Practice: CSCL2011 Conference Proceedings',1014,-973,1312,1314]]
 
 #list of paper types and their starting pages
-papertypeandstart = [("Papers", 21),("Report and Reflection Papers", 935),("Symposia",1177),("Poster",1479),("Workshops",1675),("Research-Practice Partnership Workshop for Doctoral and Early Career Researchers",1712),("Early Career Workshop",1728),("Doctoral Consortium",1747)]
+papertypeandstart = [("Long Papers", -1),("Short Papers", 565),("Posters",858),("Symposia",1008),("Interactive Events, Demonstrations and CSCL in Practice Showcases",1119),("Pre-Conference Events: Tutorials",1192),("Pre-Conference Events: Workshops",1198),("Doctoral Consortium",1206),("Early Career Workshops",1288),("Post-Conference Events",1290)] 
 
-#first page of first paper in the volume
-volumeonestart = 23
-volumetwostart = 625
-volumethreestart = 1179
+#the registrant created suffix used prior to the id; conference + year (e.g. cscl2014)
+doisuffix = "cscl2011"
 
-#pdf page number minus written page number
-volumeonepageoffset = 40
-volumetwopageoffset = -582
-volumethreepageoffset = -1136
+#conference year
+conferenceyear = 2011
 
-#first page of last paper of last volume
-startoflastpaper = 1763
+#list of editors for citation; get this from the proceedings citation recommendation
+editors = "Spada, H., Stahl, G., Miyake, N., Law, N."
 
-#page after last page of last paper of last volume
-endofdoc = 1764 
+#publisher location used for citation
+publisher = "International Society of the Learning Sciences"
+
+#date that the conference took place in the format yyyy-mm
+issued = "2011-06"
 
 splitPDFs = True
 printfullmetadata = True
 createimportfiles = True
-
-#the registrant created suffix used prior to the id; conference + year (e.g. cscl2014)
-doisuffix = "icls2014"
-
-#conference year
-conferenceyear = 2014
-
-#list of editors for citation; get this from the proceedings citation recommendation
-editors = "Polman, J. L., Kyza, E. A., O'Neill, D. K., Tabak, I., Penuel, W. R., Jurow, A. S., O'Connor, K., Lee, T., and D'Amico, L."
-
-#publisher location used for citation
-conferencelocation = "Boulder, CO"
-
-#date that the conference took place in the format yyyy-mm
-issued = "2014-06"
-
-#title of conference with conference acronym and year
-conferencetitle = "Learning and Becoming in Practice: The International Conference of the Learning Sciences (ICLS) 2014"
 
 subj = Template(u'<dc:subject xml:lang="en">$subject</dc:subject>')
 def subjects(sstr):
@@ -100,11 +86,11 @@ item = Template(u"""<?xml version="1.0" encoding="utf-8" standalone="no"?>
       <dcvalue element="date" qualifier="accessioned">$datetime</dcvalue>
       <dcvalue element="date" qualifier="available">$datetime</dcvalue>
       <dcvalue element="date" qualifier="issued">$issued</dcvalue>
-      <dcvalue element="identifier" qualifier="citation" language="en_US">$authorscit&#x20;($conferenceyear).&#x20;$title.&#x20;In&#x20;$editors&#x20;(Eds.),&#x20;$conferencetitle,&#x20;$volume&#x20;(pp.&#x20;$pages).&#x20;$conferencelocation:&#x20;International&#x20;Society&#x20;of&#x20;the&#x20;Learning&#x20;Sciences.</dcvalue>
+      <dcvalue element="identifier" qualifier="citation" language="en_US">$authorscit&#x20;($conferenceyear).&#x20;$title.&#x20;In&#x20;$editors&#x20;(Eds.),&#x20;$volumetitle&#x20;(pp.&#x20;$pages).&#x20;$publisher.</dcvalue>
       <dcvalue element="identifier" qualifier="uri">https://doi.dx.org&#x2F;10.22318&#x2F;$doisuffix.$id</dcvalue>
       <dcvalue element="description" qualifier="abstract" language="en_US">$abstract</dcvalue>
       <dcvalue element="language" qualifier="iso" language="en_US">en</dcvalue>
-      <dcvalue element="publisher" qualifier="none" language="en_US">$conferencelocation:&#x20;International&#x20;Society&#x20;of&#x20;the&#x20;Learning&#x20;Sciences</dcvalue>
+      <dcvalue element="publisher" qualifier="none" language="en_US">$publisher</dcvalue>
       <dcvalue element="title" qualifier="none" language="en_US">$title</dcvalue>
       <dcvalue element="type" qualifier="none" language="en_US">$type</dcvalue>
     </dublin_core>
@@ -144,15 +130,14 @@ for group in g:
     title = fline.groups(1)[0].strip()
     page = fline.groups(1)[1].strip()
     authors = group[1].replace("\r", "").strip()
-    if int(page) >= volumeonestart and int(page) < volumetwostart:
-        volume = volumeonename
-    elif int(page) >= volumetwostart and int(page) < volumethreestart:
-        volume = volumetwoname
-    elif int(page) >= volumethreestart and int(page) < endofdoc:
-        volume = volumethreename
-    else:
-        raise ValueError("Page number is outside of the provided range", int(page), volumeonestart, endofdoc)
 
+    #Get the volume number for current TOC entry
+    volumeindex = 0
+    for currvolumeindex, currvolume in enumerate(volumes):
+        if int(page) >= currvolume[VOL_FIRST_PAGE_INDEX] and int(page) < currvolume[VOL_END_PAGE]:
+            volumeindex = currvolumeindex
+    volumenumber = volumeindex+1
+    
     papertype = None
     for currpapertype, currpaperstart in papertypeandstart:
         if int(page) >= currpaperstart:
@@ -161,7 +146,7 @@ for group in g:
     if papertype == None:
         raise valueError ("No paper type was assigned", int(page), title, authors) 
 
-    cs.append([int(page),title,authors, volume, papertype])
+    cs.append([int(page), title, authors, volumenumber, papertype])
 
 metadatafile = open("rawmetadata.txt","w+")
 metadatafile.write(str(cs))
@@ -171,11 +156,12 @@ metadatafile.close()
 if printfullmetadata:
     metadatafile = open("fullmetadata.txt","w+")
 for idx, c in enumerate(cs):
-    startpage = c[0]
-    if startpage == startoflastpaper:
-        endpage = endofdoc
+    startpage = c[ENTRY_START_PAGE_INDEX]
+
+    if startpage == volumes[c[ENTRY_VOL_NUM_INDEX]-1][VOL_LAST_PAPER_INDEX]:
+        endpage = volumes[c[ENTRY_VOL_NUM_INDEX]-1][VOL_END_PAGE]
     else:
-        endpage = cs[idx+1][0]
+        endpage = cs[idx+1][ENTRY_START_PAGE_INDEX]
 
         #Update endpage if there is a section header between papers
         for currpapertype, currpaperstart in papertypeandstart:
@@ -183,16 +169,10 @@ for idx, c in enumerate(cs):
                 endpage = currpaperstart
 
     if splitPDFs:
-        print("Splitting PDF: page " + str(startpage) + " - " + str(endpage-1) + " from " + str(c[3]))
-        if c[3] == 'Volume 1':
-            fin = subprocess.run(['/bin/bash', './split.sh', volumeonefilename, str(startpage+volumeonepageoffset), str(endpage+volumeonepageoffset-1),'pdfs/' + str(startpage) + '-' + str(endpage-1) + '.pdf'])
-     
-        if c[3] == 'Volume 2':
-            fin = subprocess.run(['/bin/bash', './split.sh', volumetwofilename, str(startpage+volumetwopageoffset), str(endpage+volumetwopageoffset-1),'pdfs/' + str(startpage) + '-' + str(endpage-1) + '.pdf'])
-           
-        if c[3] == 'Volume 3':
-             fin = subprocess.run(['/bin/bash', './split.sh', volumethreefilename, str(startpage+volumethreepageoffset), str(endpage+volumethreepageoffset-1),'pdfs/' + str(startpage) + '-' + str(endpage-1) + '.pdf'])
-
+        pageoffset = volumes[c[ENTRY_VOL_NUM_INDEX]-1][VOL_PAGE_OFFSET_INDEX]
+        print("Splitting PDF: page " + str(startpage) + " - " + str(endpage-1) + " from Volume " + str(c[ENTRY_VOL_NUM_INDEX]))
+        fin = subprocess.run(['/bin/bash', './split.sh', volumes[c[ENTRY_VOL_NUM_INDEX]-1][VOL_FILENAME_INDEX], str(startpage+pageoffset), str(endpage+pageoffset-1),'pdfs/' + str(startpage) + '-' + str(endpage-1) + '.pdf']) 
+        
         fin = subprocess.run(['pdftotext', '-simple', 'pdfs/'+ str(startpage)+'-'+ str(endpage-1)+'.pdf'])
 
     if printfullmetadata:
@@ -206,11 +186,12 @@ for idx, c in enumerate(cs):
         else:
             abstract = ''
 
-        names = c[2].split(',')
+        names = c[ENTRY_AUTHORS_INDEX].split(',')
         authorscit = makeAuthorsCit(names)
         authors = makeAuthors(names)
         id = str(startpage)+'-'+str(endpage-1)
-        full = item.substitute(authors=authors, authorscit=authorscit, title=escape(c[1]), datetime=genDatetime(),id=str(startpage), abstract=escape(abstract), volume=escape(c[3]), type=escape(c[4]), pages=str(startpage)+'-'+str(endpage-1), doisuffix=doisuffix, conferenceyear=conferenceyear, editors=editors, conferencelocation=conferencelocation, issued=issued, conferencetitle=conferencetitle)
+        full = item.substitute(authors=authors, authorscit=authorscit, title=escape(c[ENTRY_TITLE_INDEX]), datetime=genDatetime(),id=str(startpage), abstract=escape(abstract), type=escape(c[ENTRY_PAPER_TYPE_INDEX]), pages=str(startpage)+'-'+str(endpage-1), doisuffix=doisuffix, conferenceyear=conferenceyear, editors=editors, publisher=publisher, issued=issued, volumetitle=volumes[c[ENTRY_VOL_NUM_INDEX]-1][VOL_TITLE_INDEX])
+    if startpage == volumes[c[ENTRY_VOL_NUM_INDEX]-1][VOL_LAST_PAPER_INDEX]:
     
         metadatafile.write(str(full))
 
